@@ -1,12 +1,10 @@
-import 'dart:typed_data';
+import 'dart:developer';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:test_world/flood_fill.dart';
-
 import 'package:http/http.dart' as http;
-
+import 'package:test_world/flood_fill.dart';
 
 class FloodFillRasterScreen extends StatelessWidget {
   const FloodFillRasterScreen({super.key});
@@ -48,26 +46,26 @@ class _FloodFillRasterState extends State<FloodFillRaster> {
 
     final response = await http.get(Uri.parse(url));
 
+    // Load the image as byte data
+    ByteData byteData = await rootBundle.load('assets/world2.png');
 
+    final Uint8List data = byteData.buffer.asUint8List();
 
-  // Load the image as byte data
-  ByteData byteData = await rootBundle.load('assets/world.png');
-
-
-    final Uint8List data =  byteData.buffer.asUint8List();
-    
-    final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final ui.Codec codec =
+        await ui.instantiateImageCodec(data.buffer.asUint8List());
     final ui.FrameInfo fi = await codec.getNextFrame();
     return fi.image;
   }
 
   void _onTapDown(TapDownDetails details) async {
     final Offset localPosition = details.localPosition;
+    log(details.localPosition.toString());
     final int x = localPosition.dx.toInt();
     final int y = localPosition.dy.toInt();
 
     const ui.Color newColor = Colors.red;
-    final image = await ImageFloodFillSpanImpl(_image!).fill(x, y, newColor);
+    final image = await ImageFloodFill(_image!).fill(x, y, newColor);
+    log(image.toString());
     setState(() {
       _image = image;
     });
@@ -99,7 +97,8 @@ class ImagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawImage(image, Offset.zero, Paint()..filterQuality = FilterQuality.high);
+    canvas.drawImage(
+        image, Offset.zero, Paint()..filterQuality = FilterQuality.high);
   }
 
   @override

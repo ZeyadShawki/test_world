@@ -97,149 +97,6 @@ bool isAlmostSameColor({
 
 
 
-
-
-
-
-
-class BasicFloodFill extends FloodFill<List<List<int>>, int> {
-  const BasicFloodFill(List<List<int>> image) : super(image);
-
-  @override
-  List<List<int>>? fill(int startX, int startY, int newColor) {
-    int originalColor = image[startX][startY];
-    _floodFillUtil(startX, startY, originalColor, newColor);
-    return image;
-  }
-
-  void _floodFillUtil(int x, int y, int originalColor, int newColor) {
-    // Check if current node is inside the boundary and not already filled
-    if (!_isInside(x, y) || image[x][y] != originalColor) return;
-
-    // Set the node
-    image[x][y] = newColor;
-
-    // Perform flood-fill one step in each direction
-    _floodFillUtil(x + 1, y, originalColor, newColor); // South
-    _floodFillUtil(x - 1, y, originalColor, newColor); // North
-    _floodFillUtil(x, y - 1, originalColor, newColor); // West
-    _floodFillUtil(x, y + 1, originalColor, newColor); // East
-  }
-
-  bool _isInside(int x, int y) {
-    return x >= 0 && x < image.length && y >= 0 && y < image[0].length;
-  }
-}
-
-class Point {
-  final int x;
-  final int y;
-
-  const Point(this.x, this.y);
-}
-
-class FloodFillQueueImpl extends FloodFill<List<List<int>>, int> {
-  const FloodFillQueueImpl(List<List<int>> image) : super(image);
-
-  @override
-  List<List<int>>? fill(int startX, int startY, int newColor) {
-    final int oldColor = image[startX][startY];
-    final int width = image[0].length;
-    final int height = image.length;
-    final Queue<Point> queue = Queue();
-    queue.add(Point(startY, startX));
-
-    while (queue.isNotEmpty) {
-      final Point point = queue.removeFirst();
-      final int x = point.x;
-      final int y = point.y;
-
-      if (image[y][x] == oldColor) {
-        image[y][x] = newColor;
-
-        if (x > 0) {
-          queue.add(Point(x - 1, y));
-        }
-        if (x < width - 1) {
-          queue.add(Point(x + 1, y));
-        }
-        if (y > 0) {
-          queue.add(Point(x, y - 1));
-        }
-        if (y < height - 1) {
-          queue.add(Point(x, y + 1));
-        }
-      }
-    }
-    return image;
-  }
-}
-
-class FloodFillSpanImpl extends FloodFill<List<List<int>>, int> {
-  const FloodFillSpanImpl(List<List<int>> image) : super(image);
-
-  // Check if the point is inside the canvas and matches the target color
-  bool _isInside(int x, int y, int targetColor) {
-    return x >= 0 && y >= 0 && x < image.length && y < image[0].length && image[x][y] == targetColor;
-  }
-
-  // Set a point to the replacement color
-  void _setColor(int x, int y, int replacementColor) {
-    image[x][y] = replacementColor;
-  }
-
-  @override
-  List<List<int>>? fill(int startX, int startY, int newColor) {
-    final targetColor = image[startX][startY];
-
-    if (!_isInside(startX, startY, targetColor)) return null;
-
-    var s = <List<int>>[];
-    s.add([startX, startX, startY, 1]);
-    s.add([startX, startX, startY - 1, -1]);
-
-    while (s.isNotEmpty) {
-      var tuple = s.removeLast();
-      var x1 = tuple[0];
-      var x2 = tuple[1];
-      var y = tuple[2];
-      var dy = tuple[3];
-
-      var nx = x1;
-      if (_isInside(nx, y, targetColor)) {
-        while (_isInside(nx - 1, y, targetColor)) {
-          _setColor(nx - 1, y, newColor);
-          nx--;
-        }
-        if (nx < x1) {
-          s.add([nx, x1 - 1, y - dy, -dy]);
-        }
-      }
-
-      while (x1 <= x2) {
-        while (_isInside(x1, y, targetColor)) {
-          _setColor(x1, y, newColor);
-          x1++;
-        }
-        if (x1 > nx) {
-          s.add([nx, x1 - 1, y + dy, dy]);
-        }
-        if (x1 - 1 > x2) {
-          s.add([x2 + 1, x1 - 1, y - dy, -dy]);
-        }
-        x1++;
-        while (x1 < x2 && !_isInside(x1, y, targetColor)) {
-          x1++;
-        }
-        nx = x1;
-      }
-    }
-    return image;
-  }
-}
-
-
-
 class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
   ImageFloodFill(ui.Image image) : super(image);
 
@@ -250,25 +107,116 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
 
     int width = image.width;
     int height = image.height;
-    ui.Color originalColor = getPixelColor(bytes: byteData, x: startX, y: startY, imageWidth: width);
+    ui.Color originalColor = getPixelColor(
+      bytes: byteData,
+      x: startX,
+      y: startY,
+      imageWidth: width,
+    );
 
-    _floodFillUtil(byteData, startX, startY, width, height, originalColor, newColor);
-    
+    if (!isAlmostSameColor(pixelColor: originalColor, checkColor: newColor, imageWidth: width)) {
+      _floodFillIterative(byteData, startX, startY, width, height, originalColor, newColor);
+    }
+
     return imageFromBytes(byteData, width, height);
   }
 
-  void _floodFillUtil(ByteData bytes, int x, int y, int width, int height, ui.Color originalColor, ui.Color newColor) {
-    // Check if current node is inside the boundary and not already filled
-    if (!_isInside(x, y, width, height) || !isAlmostSameColor(pixelColor: getPixelColor(bytes: bytes, x: x, y: y, imageWidth: width), checkColor: originalColor, imageWidth: width)) return;
+  // Function to calculate the fill area size without modifying the image
+  Future<int> calculateFillAreaSize(int startX, int startY) async {
+    ByteData? byteData = await imageToBytes(image);
+    if (byteData == null) return 0;
 
-    // Set the node
-    setPixelColor(x: x, y: y, bytes: bytes, imageWidth: width, newColor: newColor);
+    int width = image.width;
+    int height = image.height;
+    ui.Color originalColor = getPixelColor(
+      bytes: byteData,
+      x: startX,
+      y: startY,
+      imageWidth: width,
+    );
 
-    // Perform flood-fill one step in each direction
-    _floodFillUtil(bytes, x + 1, y, width, height, originalColor, newColor); // East
-    _floodFillUtil(bytes, x - 1, y, width, height, originalColor, newColor); // West
-    _floodFillUtil(bytes, x, y - 1, width, height, originalColor, newColor); // North
-    _floodFillUtil(bytes, x, y + 1, width, height, originalColor, newColor); // South
+    return _calculateFillAreaSize(byteData, startX, startY, width, height, originalColor);
+  }
+
+  int _calculateFillAreaSize(
+      ByteData bytes,
+      int startX,
+      int startY,
+      int width,
+      int height,
+      ui.Color originalColor) {
+    Queue<Point> queue = Queue();
+    queue.add(Point(startX, startY));
+
+    List<bool> visited = List.filled(width * height, false);
+    int areaSize = 0;
+
+    while (queue.isNotEmpty) {
+      final point = queue.removeFirst();
+      final px = point.x;
+      final py = point.y;
+      final idx = px + py * width;
+
+      if (!_isInside(px, py, width, height) ||
+          visited[idx] ||
+          !isAlmostSameColor(
+            pixelColor: getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
+            checkColor: originalColor,
+            imageWidth: width,
+          )) {
+        continue;
+      }
+
+      visited[idx] = true;
+      areaSize++;
+
+      queue.add(Point(px + 1, py)); // East
+      queue.add(Point(px - 1, py)); // West
+      queue.add(Point(px, py + 1)); // South
+      queue.add(Point(px, py - 1)); // North
+    }
+
+    return areaSize;
+  }
+
+  void _floodFillIterative(
+      ByteData bytes,
+      int x,
+      int y,
+      int width,
+      int height,
+      ui.Color originalColor,
+      ui.Color newColor,
+      ) {
+    Queue<Point> queue = Queue();
+    queue.add(Point(x, y));
+
+    List<bool> visited = List.filled(width * height, false);
+
+    while (queue.isNotEmpty) {
+      final point = queue.removeFirst();
+      final px = point.x;
+      final py = point.y;
+      final idx = px + py * width;
+
+      if (!_isInside(px, py, width, height) ||
+          visited[idx] ||
+          !isAlmostSameColor(
+            pixelColor: getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
+            checkColor: originalColor,
+            imageWidth: width,
+          )) {
+        continue;
+      }
+
+      visited[idx] = true;
+      setPixelColor(x: px, y: py, bytes: bytes, imageWidth: width, newColor: newColor);
+
+      queue.add(Point(px + 1, py)); // East
+      queue.add(Point(px - 1, py)); // West
+      queue.add(Point(px, py + 1)); // South
+      queue.add(Point(px, py - 1)); // North
+    }
   }
 
   bool _isInside(int x, int y, int width, int height) {
@@ -276,103 +224,7 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
   }
 }
 
-
-
-class ImageFloodFillQueueImpl extends FloodFill<ui.Image, ui.Color> {
-  ImageFloodFillQueueImpl(ui.Image image) : super(image);
-
-  @override
-  Future<ui.Image?> fill(int startX, int startY, ui.Color newColor) async {
-    ByteData? byteData = await imageToBytes(image);
-    if (byteData == null) return null;
-
-    int width = image.width;
-    int height = image.height;
-    ui.Color oldColor = getPixelColor(bytes: byteData, x: startX, y: startY, imageWidth: width);
-
-    final Queue<Point> queue = Queue();
-    queue.add(Point(startX, startY));
-
-    while (queue.isNotEmpty) {
-      final Point point = queue.removeFirst();
-      final int x = point.x;
-      final int y = point.y;
-
-      if (isAlmostSameColor(pixelColor: getPixelColor(bytes: byteData, x: x, y: y, imageWidth: width), checkColor: oldColor, imageWidth: width)) {
-        setPixelColor(x: x, y: y, bytes: byteData, imageWidth: width, newColor: newColor);
-
-        if (x > 0) queue.add(Point(x - 1, y));
-        if (x < width - 1) queue.add(Point(x + 1, y));
-        if (y > 0) queue.add(Point(x, y - 1));
-        if (y < height - 1) queue.add(Point(x, y + 1));
-      }
-    }
-
-    return imageFromBytes(byteData, width, height);
-  }
-}
-
-
-
-
-class ImageFloodFillSpanImpl extends FloodFill<ui.Image, ui.Color> {
-  ImageFloodFillSpanImpl(ui.Image image) : super(image);
-
-  @override
-  Future<ui.Image?> fill(int startX, int startY, ui.Color newColor) async {
-    ByteData? byteData = await imageToBytes(image);
-    if (byteData == null) return null;
-
-    int width = image.width;
-    int height = image.height;
-    ui.Color targetColor = getPixelColor(bytes: byteData, x: startX, y: startY, imageWidth: width);
-
-    var s = <List<int>>[];
-    s.add([startX, startX, startY, 1]);
-    s.add([startX, startX, startY - 1, -1]);
-
-    while (s.isNotEmpty) {
-      var tuple = s.removeLast();
-      var x1 = tuple[0];
-      var x2 = tuple[1];
-      var y = tuple[2];
-      var dy = tuple[3];
-
-      var nx = x1;
-      if (_isInside(nx, y, width, height, byteData, targetColor)) {
-        while (_isInside(nx - 1, y, width, height, byteData, targetColor)) {
-          setPixelColor(x: nx - 1, y: y, bytes: byteData, imageWidth: width, newColor: newColor);
-          nx--;
-        }
-        if (nx < x1) {
-          s.add([nx, x1 - 1, y - dy, -dy]);
-        }
-      }
-
-      while (x1 <= x2) {
-        while (_isInside(x1, y, width, height, byteData, targetColor)) {
-          setPixelColor(x: x1, y: y, bytes: byteData, imageWidth: width, newColor: newColor);
-          x1++;
-        }
-        if (x1 > nx) {
-          s.add([nx, x1 - 1, y + dy, dy]);
-        }
-        if (x1 - 1 > x2) {
-          s.add([x2 + 1, x1 - 1, y - dy, -dy]);
-        }
-        x1++;
-        while (x1 < x2 && !_isInside(x1, y, width, height, byteData, targetColor)) {
-          x1++;
-        }
-        nx = x1;
-      }
-    }
-
-    return imageFromBytes(byteData, width, height);
-  }
-
-  bool _isInside(int x, int y, int width, int height, ByteData bytes, ui.Color targetColor) {
-    if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    return isAlmostSameColor(pixelColor: getPixelColor(bytes: bytes, x: x, y: y, imageWidth: width), checkColor: targetColor, imageWidth: width);
-  }
+class Point {
+  final int x, y;
+  Point(this.x, this.y);
 }
