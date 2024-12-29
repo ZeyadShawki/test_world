@@ -1,9 +1,7 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:collection';
-
-
 
 abstract class FloodFill<T, S> {
   final T image;
@@ -11,13 +9,13 @@ abstract class FloodFill<T, S> {
   FutureOr<T?> fill(int startX, int startY, S newColor);
 }
 
-
 Future<ByteData?> imageToBytes(ui.Image image) async {
   final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
   return bytes;
 }
 
-Future<ui.Image> imageFromBytes(ByteData bytes, int imageWidth, int imageHeight) {
+Future<ui.Image> imageFromBytes(
+    ByteData bytes, int imageWidth, int imageHeight) {
   final Completer<ui.Image> completer = Completer();
   ui.decodeImageFromPixels(
     bytes.buffer.asUint8List(),
@@ -31,16 +29,14 @@ Future<ui.Image> imageFromBytes(ByteData bytes, int imageWidth, int imageHeight)
   return completer.future;
 }
 
-
-
 void setPixelColor({
   required int x,
   required int y,
   required ByteData bytes,
-  
-  // for correct representation of color bytes' coordinates 
+
+  // for correct representation of color bytes' coordinates
   // in an array of image bytes
-  required int imageWidth,  
+  required int imageWidth,
   required ui.Color newColor,
 }) {
   bytes.setUint32(
@@ -81,8 +77,6 @@ ui.Color colorFromIntRGBA(int uint32Rgba) {
   return ui.Color.fromARGB(a, r, g, b);
 }
 
-
-
 bool isAlmostSameColor({
   required ui.Color pixelColor,
   required ui.Color checkColor,
@@ -94,8 +88,6 @@ bool isAlmostSameColor({
   final int bDiff = (pixelColor.blue - checkColor.blue).abs();
   return rDiff < threshold && gDiff < threshold && bDiff < threshold;
 }
-
-
 
 class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
   ImageFloodFill(ui.Image image) : super(image);
@@ -114,8 +106,10 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
       imageWidth: width,
     );
 
-    if (!isAlmostSameColor(pixelColor: originalColor, checkColor: newColor, imageWidth: width)) {
-      _floodFillIterative(byteData, startX, startY, width, height, originalColor, newColor);
+    if (!isAlmostSameColor(
+        pixelColor: originalColor, checkColor: newColor, imageWidth: width)) {
+      _floodFillIterative(
+          byteData, startX, startY, width, height, originalColor, newColor);
     }
 
     return imageFromBytes(byteData, width, height);
@@ -135,16 +129,12 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
       imageWidth: width,
     );
 
-    return _calculateFillAreaSize(byteData, startX, startY, width, height, originalColor);
+    return _calculateFillAreaSize(
+        byteData, startX, startY, width, height, originalColor);
   }
 
-  int _calculateFillAreaSize(
-      ByteData bytes,
-      int startX,
-      int startY,
-      int width,
-      int height,
-      ui.Color originalColor) {
+  int _calculateFillAreaSize(ByteData bytes, int startX, int startY, int width,
+      int height, ui.Color originalColor) {
     Queue<Point> queue = Queue();
     queue.add(Point(startX, startY));
 
@@ -160,7 +150,8 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
       if (!_isInside(px, py, width, height) ||
           visited[idx] ||
           !isAlmostSameColor(
-            pixelColor: getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
+            pixelColor:
+                getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
             checkColor: originalColor,
             imageWidth: width,
           )) {
@@ -180,14 +171,14 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
   }
 
   void _floodFillIterative(
-      ByteData bytes,
-      int x,
-      int y,
-      int width,
-      int height,
-      ui.Color originalColor,
-      ui.Color newColor,
-      ) {
+    ByteData bytes,
+    int x,
+    int y,
+    int width,
+    int height,
+    ui.Color originalColor,
+    ui.Color newColor,
+  ) {
     Queue<Point> queue = Queue();
     queue.add(Point(x, y));
 
@@ -202,7 +193,8 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
       if (!_isInside(px, py, width, height) ||
           visited[idx] ||
           !isAlmostSameColor(
-            pixelColor: getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
+            pixelColor:
+                getPixelColor(bytes: bytes, x: px, y: py, imageWidth: width),
             checkColor: originalColor,
             imageWidth: width,
           )) {
@@ -210,7 +202,8 @@ class ImageFloodFill extends FloodFill<ui.Image, ui.Color> {
       }
 
       visited[idx] = true;
-      setPixelColor(x: px, y: py, bytes: bytes, imageWidth: width, newColor: newColor);
+      setPixelColor(
+          x: px, y: py, bytes: bytes, imageWidth: width, newColor: newColor);
 
       queue.add(Point(px + 1, py)); // East
       queue.add(Point(px - 1, py)); // West

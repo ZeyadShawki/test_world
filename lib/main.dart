@@ -1,24 +1,42 @@
-import 'package:flutter/material.dart';
-import 'package:test_world/raster_drag_drop.dart';
+import 'dart:developer';
 
-void main() {
-  runApp(const MyApp());
-}
+import 'package:flutter/material.dart';
+import 'package:test_world/selctor.dart';
+
+void main() => runApp(
+      MaterialApp(
+        theme: ThemeData(
+          primaryColor: Colors.blue,
+        ),
+        home: MyApp(),
+      ),
+    );
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+  List<String> selected = [];
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: TeethSelector(
+          initiallySelected: selected,
+          onChange: (s) {
+            selected.addAll(s);
+
+            log(selected.toString());
+          },
+          multiSelect: false,
+          colorized: {
+            for (var e in selected)
+              e: e == "24" ? Colors.blue : Colors.green.withOpacity(0.5),
+          },
+          StrokedColorized: {"24": Colors.grey.withOpacity(0.5)},
+          notation: (isoString) => "Tooth ISO: $isoString",
+          selectedColor: Colors.red,
+          showPrimary: false,
+        ),
       ),
-      home: FloodFillRasterDragAndDropScreen(),
-      // home: FloodFillRasterScreen(),
     );
   }
 }

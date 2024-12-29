@@ -47,7 +47,7 @@ class _FloodFillRasterState extends State<FloodFillRaster> {
     final response = await http.get(Uri.parse(url));
 
     // Load the image as byte data
-    ByteData byteData = await rootBundle.load('assets/world2.png');
+    ByteData byteData = await rootBundle.load('assets/car2.png');
 
     final Uint8List data = byteData.buffer.asUint8List();
 

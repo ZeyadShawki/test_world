@@ -59,7 +59,7 @@ class _FloodFillRasterState extends State<FloodFillRaster> {
 
   // Load image from assets
   Future<ui.Image> _loadImage() async {
-    ByteData byteData = await rootBundle.load('assets/world2.png');
+    ByteData byteData = await rootBundle.load('assets/leaf.png');
     final Uint8List data = byteData.buffer.asUint8List();
     final ui.Codec codec = await ui.instantiateImageCodec(data);
     final ui.FrameInfo fi = await codec.getNextFrame();
@@ -75,32 +75,32 @@ class _FloodFillRasterState extends State<FloodFillRaster> {
       final size = await ImageFloodFill(_image!).calculateFillAreaSize(x, y);
       log(size.toString());
       // Check if color exists in the map and if the size is valid
-      bool colorExists = false;
-      bool sizeMatches = false;
+      bool colorExists = true;
+      bool sizeMatches = true;
 
-      // Loop through the data map to check if the color and size exist
-      for (var entry in data) {
-        entry.forEach((key, value) {
-          if (value == color) {
-            colorExists = true;
-            // Check if size corresponds to the key
-            if (key == size) {
-              sizeMatches = true;
-            }
-          }
-        });
-      }
+      // // Loop through the data map to check if the color and size exist
+      // for (var entry in data) {
+      //   entry.forEach((key, value) {
+      //     if (value == color) {
+      //       colorExists = true;
+      //       // Check if size corresponds to the key
+      //       if (key == size) {
+      //         sizeMatches = true;
+      //       }
+      //     }
+      //   });
+      // }
 
-      if (colorExists && sizeMatches) {
-        log('True: Color and size are correct');
-        // Color is correct, perform flood fill and update the image
-        final image = await ImageFloodFill(_image!).fill(x, y, color);
-        setState(() {
-          _image = image;
-        });
-      } else {
-        log('False: Color or size is incorrect');
-      }
+      // if (colorExists && sizeMatches) {
+      log('True: Color and size are correct');
+      // Color is correct, perform flood fill and update the image
+      final image = await ImageFloodFill(_image!).fill(x, y, color);
+      setState(() {
+        _image = image;
+      });
+      // } else {
+      //   log('False: Color or size is incorrect');
+      // }
     }
   }
 
