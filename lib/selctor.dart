@@ -1,18 +1,21 @@
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:svg_path_parser/svg_path_parser.dart';
+import 'package:test_world/main.dart';
 import 'package:xml/xml.dart';
+import 'dart:ui' as ui;
+typedef PictureData = ({Size size, Map<String, PicturePathModel> teeth});
 
-typedef Data = ({Size size, Map<String, Tooth> teeth});
-
-class TeethSelector extends StatefulWidget {
+class ColorTheSvgWidget extends StatefulWidget {
   final bool multiSelect;
   final Color selectedColor;
   final Color unselectedColor;
   final Color tooltipColor;
   final List<String> initiallySelected;
   final Map<String, Color> colorized;
-  final Map<String, Color> StrokedColorized;
+  final Map<String, Color> strokedColorized;
   final Color defaultStrokeColor;
   final Map<String, double> strokeWidth;
   final double defaultStrokeWidth;
@@ -21,19 +24,30 @@ class TeethSelector extends StatefulWidget {
   final bool showPrimary;
   final bool showPermanent;
   final void Function(List<String> selected) onChange;
+
   final String Function(String isoString)? notation;
   final TextStyle? textStyle;
   final TextStyle? tooltipTextStyle;
 
-  const TeethSelector({
+final void Function() onWrongAnswer;
+
+final void Function() onRightAnswer;
+
+
+  const ColorTheSvgWidget({
     super.key,
+
+ required   this.onWrongAnswer ,
+   required this.onRightAnswer ,
+
+
     this.multiSelect = false,
     this.selectedColor = Colors.blue,
     this.unselectedColor = Colors.grey,
     this.tooltipColor = Colors.black,
     this.initiallySelected = const [],
     this.colorized = const {},
-    this.StrokedColorized = const {},
+    this.strokedColorized = const {},
     this.defaultStrokeColor = Colors.transparent,
     this.strokeWidth = const {},
     this.defaultStrokeWidth = 1,
@@ -48,177 +62,231 @@ class TeethSelector extends StatefulWidget {
   });
 
   @override
-  State<TeethSelector> createState() => _TeethSelectorState();
+  State<ColorTheSvgWidget> createState() => _ColorTheSvgWidgetState();
 }
 
-class _TeethSelectorState extends State<TeethSelector> {
+class _ColorTheSvgWidgetState extends State<ColorTheSvgWidget> {
+  Offset? tapPosition; // Holds the last tap position
+  final GlobalKey _painterKey = GlobalKey();
+List<Offset> dropPositions = [];
+
   @override
-  void initState() {
-    super.initState();
-  }
-
   Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: loadTeeth(initiallySelected: widget.initiallySelected),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Container(
-              color: Colors.amber,
-            );
-          }
+    return FutureBuilder<PictureData>(
+      future: loadPictures(initiallySelected: widget.initiallySelected),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(color: Colors.amber);
+        }
 
-          if (snapshot.data!.size == Size.zero) return const UnconstrainedBox();
+        final PictureData = snapshot.data!;
 
-          return FittedBox(
-            child: SizedBox.fromSize(
-              size: snapshot.data!.size,
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 10,
-                    top: snapshot.data!.size.height * 0.5 - 11,
-                    child: Text(widget.rightString, style: widget.textStyle),
-                  ),
-                  Positioned(
-                    right: 10,
-                    top: snapshot.data!.size.height * 0.5 - 11,
-                    child: Text(widget.leftString, style: widget.textStyle),
-                  ),
-                  // teeth
-                  for (final MapEntry(key: key, value: tooth)
-                      in snapshot.data!.teeth.entries)
-                    if ((widget.showPrimary || int.parse(key) < 50) &&
-                        (widget.showPermanent || int.parse(key) > 50))
+        return FittedBox(
+          child: DragTarget<ui.Color>(
+            onAcceptWithDetails: (details) {
+  final RenderBox renderBox = _painterKey.currentContext!.findRenderObject() as RenderBox;
+  final localPosition = renderBox.globalToLocal(details.offset);
+
+  setState(() {
+    dropPositions.add(localPosition); // Add new drop position
+    tapPosition = localPosition; // Update tap position to local
+  });
+
+  log('/// drag target localPosition: $tapPosition');
+  _detectAndColorPicturePathModel(details.data, tapPosition!, snapshot.data!.teeth);
+
+            },
+            builder: (context, candidateData, rejectedData) =>
+            SizedBox.fromSize(
+                              key: _painterKey,
+
+                size: PictureData.size,
+                child: Stack(
+                  children: [
+                    for (final entry in PictureData.teeth.entries)
                       Positioned.fromRect(
-                        rect: tooth.rect,
-                        child: GestureDetector(
-                          key: Key(
-                              "tooth-iso-$key-${tooth.selected ? "selected" : "not-selected"}"),
-                          onTap: () {
-                            setState(() {
-                              if (widget.multiSelect == false) {
-                                for (final tooth
-                                    in snapshot.data!.teeth.entries) {
-                                  if (tooth.key != key) {
-                                    tooth.value.selected = false;
-                                  }
-                                }
-                              }
-                              tooth.selected = !tooth.selected;
-                              widget.onChange(snapshot.data!.teeth.entries
-                                  .where((tooth) => tooth.value.selected)
-                                  .map((tooth) => tooth.key)
-                                  .toList());
-                            });
-                          },
-                          child: Tooltip(
-                            triggerMode: TooltipTriggerMode.manual,
-                            message: widget.notation == null
-                                ? key
-                                : widget.notation!(key),
-                            textAlign: TextAlign.center,
-                            textStyle: widget.tooltipTextStyle,
-                            preferBelow: false,
-                            decoration: BoxDecoration(
-                                color: widget.tooltipColor,
-                                boxShadow: kElevationToShadow[6]),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 500),
-                              clipBehavior: Clip.antiAlias,
-                              decoration: ShapeDecoration(
-                                color: tooth.selected
-                                    ? widget.selectedColor
-                                    : widget.colorized[key] ??
-                                        widget.unselectedColor,
-                                shape: ToothBorder(
-                                  tooth.path,
-                                  strokeColor: widget.StrokedColorized[key] ??
-                                      widget.defaultStrokeColor,
-                                  strokeWidth: widget.strokeWidth[key] ??
-                                      widget.defaultStrokeWidth,
-                                ),
-                              ),
-                            ),
+                        rect: entry.value.rect,
+                        child: CustomPaint(
+                          painter: _PicturePathModelPainter(
+                            picturePathModel: entry.value,
+                            isSelected: entry.value.selected,
+                            selectedColor: widget.colorized[entry.key] ?? widget.selectedColor,
+                            unselectedColor: widget.unselectedColor,
+                            strokeColor: widget.strokedColorized[entry.key] ?? widget.defaultStrokeColor,
+                            strokeWidth: widget.strokeWidth[entry.key] ?? widget.defaultStrokeWidth,
                           ),
                         ),
                       ),
-                ],
-              ),
+
+
+                        CustomPaint(
+        painter: _TapPainter(positions: dropPositions),
+      ),
+                  ],
+                ),
+              
             ),
-          );
-        });
+          ),
+        );
+      },
+    );
   }
-}
 
-Future<Data> loadTeeth({required List<String> initiallySelected}) async {
-  final String rawSvg = await rootBundle.loadString('assets/teeth.svg');
-  final doc = XmlDocument.parse(rawSvg);
-  final viewBox = doc.rootElement.getAttribute('viewBox')!.split(' ');
-  final w = double.parse(viewBox[2]);
-  final h = double.parse(viewBox[3]);
+  
+void _detectAndColorPicturePathModel(
+  ui.Color color,
+    Offset off, Map<String, PicturePathModel> pictures) async {
+  final tapOffset = off; // Position of the tap
 
-  final teeth = doc.rootElement.findAllElements('path');
+  bool hasSelectionChanged = false;
+  String? tappedPicturePathModelId;
 
-  final d = (
-    size: Size(w, h),
-    teeth: <String, Tooth>{
-      for (final tooth in teeth)
-        tooth.getAttribute('id')!:
-            Tooth(parseSvgPath(tooth.getAttribute('d')!)),
-    },
-  );
+  for (final entry in pictures.entries) {
+    final picturePathModel = entry.value;
 
-  for (var element in initiallySelected) {
-    if (d.teeth[element] != null) {
-      d.teeth[element]!.selected = true;
+    // Adjust the tap offset for the PicturePathModel's bounding box
+    final adjustedTapOffset = tapOffset - picturePathModel.rect.topLeft;
+
+    if (picturePathModel.path.contains(adjustedTapOffset)) {
+      tappedPicturePathModelId = picturePathModel.id; // Store the tapped PicturePathModel's ID
+
+      if (picturePathModel.selected) {
+        // If already selected, log and exit
+        log("Picture already selected");
+        return;
+      }
+
+log(picturePathModel.color.toString());
+      if (picturePathModel.color == color) {
+        // If colors match
+       widget.onRightAnswer();
+        picturePathModel.selected = true;
+        hasSelectionChanged = true;
+      } else {
+        // If colors don't match
+       widget.onWrongAnswer();
+        return;
+      }
     }
   }
-  return d;
+
+  if (hasSelectionChanged) {
+    // Notify about changes in selected teeth
+    widget.onChange(
+      pictures.entries
+          .where((entry) => entry.value.selected)
+          .map((e) => e.key)
+          .toList(),
+    );
+
+    // Trigger a UI update
+    setState(() {});
+  }
 }
 
-class Tooth {
-  Tooth(Path originalPath) {
+}
+
+class _TapPainter extends CustomPainter {
+  final List<Offset> positions;
+
+  _TapPainter({required this.positions});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.red
+      ..style = PaintingStyle.fill;
+
+    // Draw circles at each drop position
+    for (var position in positions) {
+      canvas.drawCircle(position, 20.0, paint); // You can adjust the radius here
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _PicturePathModelPainter extends CustomPainter {
+  final PicturePathModel picturePathModel;
+  final bool isSelected;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final Color strokeColor;
+  final double strokeWidth;
+
+  _PicturePathModelPainter({
+    required this.picturePathModel,
+    required this.isSelected,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.strokeColor,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fillPaint = Paint()
+      ..color = isSelected ? selectedColor : unselectedColor
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(picturePathModel.path, fillPaint);
+
+    final strokePaint = Paint()
+      ..color = strokeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawPath(picturePathModel.path, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+Future<PictureData> loadPictures(
+    {required List<String> initiallySelected}) async {
+  final rawSvg = await rootBundle.loadString('assets/leaf_modified22.svg');
+  final doc = XmlDocument.parse(rawSvg);
+  final viewBox = doc.rootElement.getAttribute('viewBox')!.split(' ');
+  final width = double.parse(viewBox[2]);
+  final height = double.parse(viewBox[3]);
+
+  final teethPaths = doc.rootElement.findAllElements('path');
+
+  final teeth = {
+    for (final pathElement in teethPaths)
+      pathElement.getAttribute('class')!: PicturePathModel(
+          parseSvgPath(pathElement.getAttribute('d')!),
+          pathElement.getAttribute('id') ?? '',
+          
+        colorFromHex(  pathElement.getAttribute('myColor') ??'#F58220')
+          ),
+  };
+
+
+
+  for (var id in initiallySelected) {
+    if (teeth.containsKey(id)) {
+      teeth[id]!.selected = true;
+    }
+  }
+
+  return (size: Size(width, height), teeth: teeth);
+}
+
+class PicturePathModel {
+  late String id;
+  PicturePathModel(Path originalPath, String name,Color picColor) {
     rect = originalPath.getBounds();
     path = originalPath.shift(-rect.topLeft);
+    id = name;
+    color=picColor;
   }
+    late final Color color;
+
 
   late final Path path;
   late final Rect rect;
   bool selected = false;
-}
-
-class ToothBorder extends ShapeBorder {
-  final Path path;
-  final double strokeWidth;
-  final Color strokeColor;
-
-  const ToothBorder(
-    this.path, {
-    required this.strokeWidth,
-    required this.strokeColor,
-  });
-
-  @override
-  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
-
-  @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
-      getOuterPath(rect);
-
-  @override
-  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
-    return rect.topLeft == Offset.zero ? path : path.shift(rect.topLeft);
-  }
-
-  @override
-  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..color = strokeColor;
-    canvas.drawPath(getOuterPath(rect), paint);
-  }
-
-  @override
-  ShapeBorder scale(double t) => this;
 }
